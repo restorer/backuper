@@ -2,9 +2,9 @@
 
 cd "$(dirname "$0")"
 
-[ -e .backup/fastmail-mail ] && rm -r .backup/fastmail-mail
-[ -e .backup/fastmail-calendar ] && rm -r .backup/fastmail-calendar
-[ -e .backup/todoist ] && rm -r .backup/todoist
-[ -e .backup/github ] && rm -r .backup/github
-[ -e .backup/bitbucket ] && rm -r .backup/bitbucket
-[ -e .backup/server ] && rm -r .backup/server
+[ -e .backup/fastmail-mail ] && rm -rf .backup/fastmail-mail
+[ -e .backup/fastmail-calendar ] && rm -rf .backup/fastmail-calendar
+[ -e .backup/todoist ] && rm -rf .backup/todoist
+[ -e .backup/github ] && rm -rf .backup/github
+[ -e .backup/bitbucket ] && rm -rf .backup/bitbucket
+[ -e .backup/server ] && rm -rf .backup/server
