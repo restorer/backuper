@@ -30,8 +30,11 @@ require 'base64'
 require 'json'
 require 'evernote-thrift'
 
+CLIENT_NAME = 'Everbackup'
+NETWORK_RETRIES = 10
+PATH_NOTEBOOKS = 'notebooks'
+PATH_NOTES = 'notes'
 NOTES_BULK = 250
-RETRIES = 10
 
 def createThriftProtocol(url)
     return Thrift::BinaryProtocol.new(Thrift::HTTPClientTransport.new(url))
@@ -88,7 +91,7 @@ def convertToJson(value, info)
     end
 end
 
-def shouldUpdateNote(path, updateSequenceNum)
+def shouldUpdateNotebookOrNote(path, updateSequenceNum)
     return true unless File.exists?(path)
 
     File.open(path, 'rb') do |fi|
@@ -112,33 +115,76 @@ def saveNotebookOrNote(path, element)
     end
 end
 
-def process(basePath, authToken, evernoteHost)
-    userStoreUrl = "https://#{evernoteHost}/edam/user"
-    userStore = Evernote::EDAM::UserStore::UserStore::Client.new(createThriftProtocol("https://#{evernoteHost}/edam/user"))
+def networkCall
+    lastError = nil
 
-    versionOk = userStore.checkVersion(
-        'Everbackup',
-        Evernote::EDAM::UserStore::EDAM_VERSION_MAJOR,
-        Evernote::EDAM::UserStore::EDAM_VERSION_MINOR
-    )
+    for i in 1 .. NETWORK_RETRIES
+        begin
+            return yield
+        rescue SocketError => e
+            lastError = e
+        end
+    end
 
-    raise Error.new('Evernote API version mismatch') unless versionOk
+    raise lastError.nil? ? Error.new('Should not happen') : lastError
+end
 
-    noteStore = Evernote::EDAM::NoteStore::NoteStore::Client.new(createThriftProtocol(userStore.getNoteStoreUrl(authToken)))
-    notebooks = noteStore.listNotebooks(authToken)
-    notebookIndex = 0
+def findExistingPathsMap(path)
+    result = {}
+
+    Dir.open(path).each do |name|
+        result["#{path}/#{name}"] = true unless name == '.' || name == '..'
+    end
+
+    return result
+end
+
+def updateNotebooks(basePath, authToken, noteStore)
+    folderPath = "#{basePath}/#{PATH_NOTEBOOKS}"
+    pathsMap = findExistingPathsMap(folderPath)
+
+    notebooks = networkCall { noteStore.listNotebooks(authToken) }
+    position = 0
+    statAdded = 0
+    statUpdated = 0
+    statDeleted = 0
 
     notebooks.each do |notebook|
-        notebookIndex += 1
-        puts "[#{notebookIndex} / #{notebooks.size}] Notebook: #{notebook.guid}"
-        saveNotebookOrNote("#{basePath}/notebooks/#{notebook.guid}.json", notebook)
+        position += 1
+        puts "[#{position} / #{notebooks.size}] Notebook: #{notebook.guid}"
+        path = "#{folderPath}/#{notebook.guid}.json"
+
+        if pathsMap.key?(path)
+            pathsMap.delete(path)
+            next unless shouldUpdateNotebookOrNote(path, notebook.updateSequenceNum)
+            statUpdated += 1
+        else
+            statAdded += 1
+        end
+
+        saveNotebookOrNote(path, notebook)
     end
+
+    pathsMap.each do |path|
+        statDeleted += 1
+        File.delete(path)
+    end
+
+    puts "Notebooks added: #{statAdded}, updated: #{statUpdated}, deleted: #{statDeleted}"
+end
+
+def updateNotes(basePath, authToken, noteStore)
+    folderPath = "#{basePath}/#{PATH_NOTES}"
+    pathsMap = findExistingPathsMap(folderPath)
 
     resultSpec = Evernote::EDAM::NoteStore::NotesMetadataResultSpec.new
     resultSpec.includeUpdateSequenceNum = true
 
     offset = 0
-    noteIndex = 0
+    position = 0
+    statAdded = 0
+    statUpdated = 0
+    statDeleted = 0
 
     loop do
         notesMetadataList = noteStore.findNotesMetadata(
@@ -152,34 +198,56 @@ def process(basePath, authToken, evernoteHost)
         break if notesMetadataList.notes.empty?
 
         notesMetadataList.notes.each do |noteMetadata|
-            noteIndex += 1
-            puts "[#{noteIndex} / #{notesMetadataList.totalNotes}] Note: #{noteMetadata.guid}"
+            position += 1
+            puts "[#{position} / #{notesMetadataList.totalNotes}] Note: #{noteMetadata.guid}"
+            path = "#{folderPath}/#{noteMetadata.guid}.json"
 
-            notePath = "#{basePath}/notes/#{noteMetadata.guid}.json"
-            next unless shouldUpdateNote(notePath, noteMetadata.updateSequenceNum)
-
-            for i in 1 .. RETRIES
-                begin
-                    note = noteStore.getNote(
-                        authToken,
-                        noteMetadata.guid,
-                        true, # withContent
-                        true, # withResourcesData
-                        true, # withResourcesRecognition
-                        true # withResourcesAlternateData
-                    )
-                rescue SocketError
-                    next
-                end
-
-                break
+            if pathsMap.key?(path)
+                pathsMap.delete(path)
+                next unless shouldUpdateNotebookOrNote(path, noteMetadata.updateSequenceNum)
+                statUpdated += 1
+            else
+                statAdded += 1
             end
 
-            saveNotebookOrNote(notePath, note)
+            saveNotebookOrNote(path, networkCall {
+                noteStore.getNote(
+                    authToken,
+                    noteMetadata.guid,
+                    true, # withContent
+                    true, # withResourcesData
+                    true, # withResourcesRecognition
+                    true # withResourcesAlternateData
+                )
+            })
         end
 
         offset += notesMetadataList.notes.size
     end
+
+    pathsMap.each do |path|
+        statDeleted += 1
+        File.delete(path)
+    end
+
+    puts "Notes added: #{statAdded}, updated: #{statUpdated}, deleted: #{statDeleted}"
+end
+
+def process(basePath, authToken, evernoteHost)
+    userStoreUrl = "https://#{evernoteHost}/edam/user"
+    userStore = Evernote::EDAM::UserStore::UserStore::Client.new(createThriftProtocol("https://#{evernoteHost}/edam/user"))
+
+    raise Error.new('Evernote API version mismatch') unless networkCall {
+        userStore.checkVersion(
+            CLIENT_NAME,
+            Evernote::EDAM::UserStore::EDAM_VERSION_MAJOR,
+            Evernote::EDAM::UserStore::EDAM_VERSION_MINOR
+        )
+    }
+
+    noteStore = Evernote::EDAM::NoteStore::NoteStore::Client.new(createThriftProtocol(userStore.getNoteStoreUrl(authToken)))
+    updateNotebooks(basePath, authToken, noteStore)
+    updateNotes(basePath, authToken, noteStore)
 end
 
 if ARGV.size == 2
