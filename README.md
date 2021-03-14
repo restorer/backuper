@@ -21,7 +21,7 @@ brew install getmail
 gem install evernote-thrift
 
 # Backuper dependencies
-brew install jq
+brew install jq yq
 ```
 
 ## Dependencies for Gentoo Linux

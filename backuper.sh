@@ -91,29 +91,45 @@ fi
 ## Server
 ##
 
+## /etc/sudoers.d/my-sudo:
+#
+# %sudo ALL=(ALL) NOPASSWD: /usr/local/bin/my-mount-backup, /usr/local/bin/my-umount-backup
+
+## /usr/local/bin/my-mount-backup
+#
+# #!/bin/bash
+#
+# if [ "$1" = "" ] || [ "$2" = "" ] ; then
+#     echo "Usage: $0 <uid> <gid>"
+#     exit 1
+# fi
+#
+# exec mount.cifs '...' /mnt/backup -o \
+#     "iocharset=utf8,rw,username=...,password=...,uid=${1},gid=${2},file_mode=0660,dir_mode=0770"
+
+## /usr/local/bin/my-umount-backup
+#
+# #!/bin/bash
+#
+# umount /mnt/backup
+
 if shoud_backup "$@" "server" ; then
     echo "Backing up Server..."
-    mkdir -p .mount
     mkdir -p .backup/server
 
-    _UID=$(id -u)
-    _GID=$(id -g)
-
-    if [ "$(mount | grep " on $(realpath .mount) type cifs ")" = "" ] ; then
-        sudo mount.cifs "${SERVER_SERVICE}" .mount -o \
-        "iocharset=utf8,rw,username=${SERVER_USERNAME},password=${SERVER_PASSWORD},uid=${_UID},gid=${_GID},file_mode=0660,dir_mode=0770"
+    if [ "$(mount | grep " on /mnt/backup type cifs ")" = "" ] ; then
+        sudo /usr/local/bin/my-mount-backup "$(id -u)" "$(id -g)"
     fi
 
-    LAST="$(ls -1 .mount | grep -E '^[0-9]{4}\-[0-9]{2}\-[0-9]{2}$' | sort -r | head -n 1)"
+    LAST="$(ls -1 /mnt/backup | grep -E '^[0-9]{4}\-[0-9]{2}\-[0-9]{2}$' | sort -r | head -n 1)"
 
     if [ "$LAST" = "" ] ; then
         echo "Unable to detect last backup folder"
         exit 1
     fi
 
-    cp .mount/$LAST/* .backup/server
-    sudo umount .mount
-    rmdir .mount
+    cp /mnt/backup/$LAST/* .backup/server
+    sudo /usr/local/bin/my-umount-backup
 fi
 
 ##
