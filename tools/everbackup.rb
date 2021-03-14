@@ -165,7 +165,7 @@ def updateNotebooks(basePath, authToken, noteStore)
         saveNotebookOrNote(path, notebook)
     end
 
-    pathsMap.each do |path|
+    pathsMap.keys.each do |path|
         statDeleted += 1
         File.delete(path)
     end
@@ -225,7 +225,7 @@ def updateNotes(basePath, authToken, noteStore)
         offset += notesMetadataList.notes.size
     end
 
-    pathsMap.each do |path|
+    pathsMap.keys.each do |path|
         statDeleted += 1
         File.delete(path)
     end
