@@ -128,6 +128,7 @@ if shoud_backup "$@" "server" ; then
         exit 1
     fi
 
+    echo ">>> Backing up $LAST ..."
     cp /mnt/backup/$LAST/* .backup/server
     sudo /usr/local/bin/my-umount-backup
 fi
