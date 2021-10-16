@@ -255,5 +255,5 @@ if ARGV.size == 2
 elsif ARGV.size == 3
     process(ARGV[0], ARGV[1], ARGV[2])
 else
-    puts "Usage: #{__FILE__} <backup path> <token>"
+    puts "Usage: #{__FILE__} <backup path> <token> [evernote host]"
 end
