@@ -2,7 +2,7 @@
 
 set -e
 
-shoud_backup () {
+should_backup () {
     [[ " $1 " =~ " --only-${2} " ]] && return 0
     [[ " $1" =~ " --only-" ]] && return 1
     [[ " $1 " =~ " --skip-${2} " ]] && return 1
@@ -17,7 +17,7 @@ source .env
 ##
 
 # https://www.evernote.com/api/DeveloperToken.action
-if shoud_backup "$@" "evernote" ; then
+if should_backup "$*" "evernote" ; then
     echo "Backing up Evernote..."
     mkdir -p .backup/evernote
     ./tools/everbackup.rb .backup/evernote "$EVERNOTE_TOKEN"
@@ -27,7 +27,7 @@ fi
 ## Fastmail: mail
 ##
 
-if shoud_backup "$@" "fastmail-mail" ; then
+if should_backup "$*" "fastmail-mail" ; then
     echo "Backing up Fastmail's mail..."
     mkdir -p .backup/fastmail-mail
     ./tools/imapbackup.sh .backup fastmail-mail 'imap.fastmail.com' 993 "$FASTMAIL_USERNAME" "$FASTMAIL_PASSWORD"
@@ -37,7 +37,7 @@ fi
 ## Fastmail: calendar
 ##
 
-if shoud_backup "$@" "fastmail-calendar" ; then
+if should_backup "$*" "fastmail-calendar" ; then
     echo "Backing up Fastmail's calendar..."
     mkdir -p .backup/fastmail-calendar
     ./tools/calbackup.sh .backup/fastmail-calendar 'https://caldav.fastmail.com' "$FASTMAIL_USERNAME" "$FASTMAIL_PASSWORD"
@@ -48,7 +48,7 @@ fi
 ##
 
 # https://developer.todoist.com/rest/v1/#overview
-if shoud_backup "$@" "todoist" ; then
+if should_backup "$*" "todoist" ; then
     echo "Backing up Todoist..."
     mkdir -p .backup/todoist
     ./tools/todobackup.sh .backup/todoist "$TODOIST_TOKEN"
@@ -59,7 +59,7 @@ fi
 ##
 
 # https://docs.github.com/en/github/authenticating-to-github/creating-a-personal-access-token
-if shoud_backup "$@" "github" ; then
+if should_backup "$*" "github" ; then
     echo "Backing up GitHub repos..."
     mkdir -p .backup/github
 
@@ -75,7 +75,7 @@ fi
 ## Bitbucket
 ##
 
-if shoud_backup "$@" "bitbucket" ; then
+if should_backup "$*" "bitbucket" ; then
     echo "Backing up Bitbucket repos..."
     mkdir -p .backup/bitbucket
 
@@ -113,7 +113,7 @@ fi
 #
 # umount /mnt/backup
 
-if shoud_backup "$@" "server" ; then
+if should_backup "$*" "server" ; then
     echo "Backing up Server..."
     mkdir -p .backup/server
 
@@ -137,7 +137,7 @@ fi
 ## External
 ##
 
-if shoud_backup "$@" "external" ; then
+if should_backup "$*" "external" ; then
     echo "External backups:"
     echo
     echo "* restorer.fct (contacts & drive) - https://takeout.google.com/settings/takeout"
